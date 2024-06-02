@@ -1,0 +1,59 @@
+version: "3.4"
+services:
+  mariadb:
+    container_name: zm_db
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: zmdb
+    restart: unless-stopped
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_DATABASE: zm
+      MARIADB_USER: zmuser
+      MARIADB_PASSWORD: zmpass
+    volumes:
+      - '/etc/localtime:/etc/localtime:ro'
+      - zm_db:/var/lib/mysql
+    deploy:
+      update_config:
+        failure_action: rollback
+    networks:
+      - zm_db_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zoneminder:
+    container_name: zm
+    ports:
+      - "80:80"
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: zm
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    deploy:
+      update_config:
+        failure_action: rollback
+    environment:
+      PHP_TIMEZONE: "America/Los_Angeles"
+    shm_size: 16g
+    volumes:
+      - './nginx.conf:/etc/nginx/nginx.conf:ro'
+      - '/etc/localtime:/etc/localtime:ro'
+      - zm_events:/var/lib/zoneminder/events
+    networks:
+      - zm_db_net
+
+volumes:
+  zm_db:
+  zm_events:
+
+networks:
+  zm_db_net:
